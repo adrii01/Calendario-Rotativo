@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and configuration for their rotational shift.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the user" },
+        "email": { "type": "string", "description": "Email address of the user" },
+        "avatarUrl": { "type": "string", "description": "URL of the user's avatar" },
+        "startDate": { "type": "string", "format": "date", "description": "Start date for the shift rotation" },
+        "rotation": {
+          "type": "array",
+          "description": "The sequence of shift types",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "shiftType": { "type": "string", "enum": ["morning", "afternoon", "night", "off"] }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "startDate", "rotation"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and their shift configuration."
+    }
+  }
+}

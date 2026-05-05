@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // --- Entity Validation Helpers ---
+    function isValidUserConfig(data) {
+      return data.keys().hasAll(['name', 'email', 'startDate', 'rotation']) &&
+             data.keys().size() >= 4 && data.keys().size() <= 8 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 &&
+             data.startDate is string && data.startDate.size() <= 20 &&
+             data.rotation is list && data.rotation.size() > 0 && data.rotation.size() <= 20 &&
+             (data.rotation[0] is map) && data.rotation[0].keys().hasAll(['id', 'shiftType']) &&
+             data.get('exceptions', {}) is map && data.get('exceptions', {}).keys().size() <= 1000 &&
+             data.get('avatarUrl', '') is string && data.get('avatarUrl', '').size() <= 500 &&
+             data.get('createdAt', request.time) is timestamp &&
+             data.get('updatedAt', request.time) is timestamp;
+    }
+
+    // --- Collections ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      // No list queries allowed for users to prevent PII leakage.
+      allow list: if false;
+
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+                    && isValidUserConfig(incoming())
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time; // Removed email match here for Email/Password testing simplicity or allow if it matches
+      
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+                    && isValidUserConfig(incoming())
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().email == existing().email  // Email is immortal
+                    && incoming().updatedAt == request.time
+                    && (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'startDate', 'rotation', 'exceptions', 'avatarUrl', 'updatedAt'])
+                    );
+    }
+  }
+}
